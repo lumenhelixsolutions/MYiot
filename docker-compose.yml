@@ -1,0 +1,59 @@
+version: "3.9"
+
+services:
+  hub:
+    build: ./hub
+    container_name: myiot-hub
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./hub:/app
+      - hub-data:/app/data
+    env_file:
+      - ./hub/.env
+    environment:
+      - DEBUG=true
+      - SEED_DEMO_DEVICES=false
+      - GO2RTC_URL=http://go2rtc:1984
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    depends_on:
+      - go2rtc
+    networks:
+      - myiot
+
+  frontend:
+    build:
+      context: ./app
+      dockerfile: Dockerfile.dev
+    container_name: myiot-frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./app:/app
+      - /app/node_modules
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    command: npm run dev -- --host
+    networks:
+      - myiot
+
+  go2rtc:
+    image: alexxit/go2rtc:latest
+    container_name: myiot-go2rtc
+    ports:
+      - "1984:1984"
+      - "8554:8554"
+    volumes:
+      - ./data/go2rtc.yaml:/config/go2rtc.yaml
+    environment:
+      - TZ=UTC
+    networks:
+      - myiot
+    restart: unless-stopped
+
+volumes:
+  hub-data:
+
+networks:
+  myiot:
+    driver: bridge

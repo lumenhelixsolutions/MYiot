@@ -1,0 +1,33 @@
+# Python virtual environment
+.venv/
+
+# npm / pnpm caches and lock files created during failed installs
+.npm-cache/
+package-lock.json
+pnpm-lock.yaml
+yarn.lock
+
+# Python / test caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Logs
+*.log
+
+# Large archives
+*.zip
+
+# Environment / secrets
+.env
+.env.local
+
+# Runtime data files
+data/*.db
+data/*.db-journal
+data/*.key
+data/*.secret_key

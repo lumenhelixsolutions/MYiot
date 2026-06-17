@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal IoT Abstraction & Discovery Framework</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'vibrant-bg': '#0A192F',
+                        'vibrant-card': '#112240',
+                        'vibrant-cyan': '#00E5FF',
+                        'vibrant-magenta': '#FF00FF',
+                        'vibrant-yellow': '#FFEA00',
+                        'vibrant-purple': '#7B1FA2',
+                        'vibrant-text': '#E6F1FF',
+                        'vibrant-muted': '#8892B0'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #0A192F;
+            color: #E6F1FF;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow-x: hidden;
+        }
+        
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 450px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 400px;
+            }
+        }
+
+        .timeline-container {
+            border-left: 2px solid #7B1FA2;
+            padding-left: 1.5rem;
+            margin-left: 1rem;
+        }
+
+        .timeline-item {
+            position: relative;
+            margin-bottom: 2rem;
+        }
+
+        .timeline-dot {
+            position: absolute;
+            left: -1.85rem;
+            top: 0.25rem;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: #00E5FF;
+            box-shadow: 0 0 10px #00E5FF;
+        }
+
+        /* Custom Scrollbar for better UI */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0A192F;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #8892B0;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #00E5FF;
+        }
+    </style>
+</head>
+<body class="antialiased selection:bg-vibrant-magenta selection:text-white">
+
+    <header class="w-full bg-vibrant-card border-b border-vibrant-purple shadow-lg shadow-vibrant-purple/20 p-8 sticky top-0 z-50">
+        <div class="max-w-6xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-3xl md:text-5xl font-bold tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-vibrant-cyan to-vibrant-magenta">C.O.R.E. Engine</h1>
+                <p class="text-vibrant-muted text-lg mt-2 font-medium">Universal IoT Abstraction & Discovery Framework</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="px-4 py-2 rounded-full border border-vibrant-cyan text-vibrant-cyan font-bold text-sm bg-vibrant-cyan/10">
+                    STATUS: ACTIVE
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto p-4 md:p-8 space-y-16 mt-8">
+
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
+            <div class="bg-vibrant-card p-6 md:p-8 rounded-2xl shadow-xl shadow-black/50 border border-white/5">
+                <h2 class="text-2xl font-bold mb-4 text-vibrant-cyan border-b border-vibrant-muted/20 pb-2">The Fragmentation Crisis</h2>
+                <p class="text-vibrant-text/90 leading-relaxed mb-4 text-justify">
+                    The modern smart home ecosystem is critically fragmented. System integrators and developers face a myriad of disparate communication protocols ranging from legacy Zigbee to custom Wi-Fi REST APIs. The lack of a universally agnostic translation layer creates immense friction.
+                </p>
+                <p class="text-vibrant-text/90 leading-relaxed text-justify">
+                    To resolve this, the C.O.R.E. Engine establishes an invisible middleware—a "One-Stop Shop" plug-in API. It abstracts the complexity of the underlying hardware, providing a unified semantic layer (e.g., OnOff, LevelControl, ColorControl) adapted directly from the robust Zigbee Cluster Library (ZCL) and modern Matter protocols.
+                </p>
+            </div>
+            <div class="bg-vibrant-card p-6 md:p-8 rounded-2xl shadow-xl shadow-black/50 border border-white/5">
+                <h3 class="text-center text-vibrant-yellow font-bold mb-6 text-xl">IoT Protocol Ecosystem Distribution</h3>
+                <div class="chart-container">
+                    <canvas id="fragmentationChart"></canvas>
+                </div>
+                <p class="text-center text-sm text-vibrant-muted mt-4">
+                    Visualizing the disparate array of communication protocols requiring normalization by the universal controller.
+                </p>
+            </div>
+        </section>
+
+        <section class="bg-vibrant-card p-6 md:p-10 rounded-2xl shadow-xl shadow-black/50 border border-white/5">
+            <h2 class="text-2xl font-bold mb-6 text-vibrant-magenta border-b border-vibrant-muted/20 pb-2">Proprietary IP Mechanics & Port Mapping</h2>
+            <p class="text-vibrant-text/90 leading-relaxed mb-8 max-w-4xl">
+                Interfacing with local LAN API devices presents profound architectural complexities. The universal controller must dynamically route payloads across highly specific TCP/UDP ports and accommodate diverse syntax formats, from Yeelight's JSON-RPC to LIFX's binary serialization. Furthermore, strict device rate limits (e.g., 144 commands/minute) mandate internal queueing logic.
+            </p>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                <div class="lg:col-span-2">
+                    <div class="chart-container h-[400px]">
+                        <canvas id="portChart"></canvas>
+                    </div>
+                </div>
+                <div class="flex flex-col justify-center space-y-4">
+                    <div class="p-4 bg-[#0A192F] rounded-lg border-l-4 border-vibrant-cyan">
+                        <div class="font-bold text-vibrant-cyan">Yeelight (TCP 55443)</div>
+                        <div class="text-sm text-vibrant-muted mt-1">Requires JSON-RPC payloads terminated precisely with carriage return and line feed (\r\n). Limit: 4 active connections.</div>
+                    </div>
+                    <div class="p-4 bg-[#0A192F] rounded-lg border-l-4 border-vibrant-magenta">
+                        <div class="font-bold text-vibrant-magenta">LIFX (UDP 56700)</div>
+                        <div class="text-sm text-vibrant-muted mt-1">Eschews JSON entirely. Requires a sophisticated serialization engine to pack and unpack structured binary byte arrays.</div>
+                    </div>
+                    <div class="p-4 bg-[#0A192F] rounded-lg border-l-4 border-vibrant-yellow">
+                        <div class="font-bold text-vibrant-yellow">Tuya (TCP/UDP 6668)</div>
+                        <div class="text-sm text-vibrant-muted mt-1">Highly hostile API (v2.x+). Demands AES-encrypted payloads and manual extraction of a 16-byte Local Key via cloud portal.</div>
+                    </div>
+                    <div class="p-4 bg-[#0A192F] rounded-lg border-l-4 border-vibrant-purple">
+                        <div class="font-bold text-vibrant-purple">Govee (UDP 4001)</div>
+                        <div class="text-sm text-vibrant-muted mt-1">Asymmetric API. Accepts multicast control payloads but frequently denies state retrieval, necessitating an optimistic state cache.</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="bg-vibrant-card p-6 md:p-8 rounded-2xl shadow-xl shadow-black/50 border border-white/5 order-2 md:order-1">
+                <h3 class="text-center text-vibrant-cyan font-bold mb-6 text-xl">Matter BLE Commissioning Interval</h3>
+                <div class="chart-container">
+                    <canvas id="bleChart"></canvas>
+                </div>
+                <p class="text-center text-sm text-vibrant-muted mt-4">
+                    A Matter node degrades its advertisement frequency after 30 seconds to minimize 2.4 GHz Wi-Fi interference.
+                </p>
+            </div>
+            <div class="bg-vibrant-card p-6 md:p-8 rounded-2xl shadow-xl shadow-black/50 border border-white/5 order-1 md:order-2 flex flex-col justify-center">
+                <h2 class="text-2xl font-bold mb-4 text-vibrant-yellow border-b border-vibrant-muted/20 pb-2">The Matter Standard & BLE Mechanics</h2>
+                <p class="text-vibrant-text/90 leading-relaxed mb-4 text-justify">
+                    The Matter protocol represents the industry's attempt at unification via IPv6. However, its initial unprovisioned discovery mechanism relies heavily on Bluetooth Low Energy (BLE) Generic Access Profile (GAP) advertising.
+                </p>
+                <p class="text-vibrant-text/90 leading-relaxed text-justify mb-4">
+                    To capture these advertisements across large physical properties, the controller architecture utilizes <strong>Distributed Bluetooth Proxies</strong> (e.g., ESP32 nodes). These remote antennas capture 31-byte payloads (specifically AD Type 0xFF) and forward them via TCP/IP to the central abstraction engine for real-time decryption.
+                </p>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="bg-vibrant-card p-6 md:p-8 rounded-2xl shadow-xl shadow-black/50 border border-white/5">
+                <h2 class="text-2xl font-bold mb-4 text-vibrant-purple border-b border-vibrant-muted/20 pb-2">Multi-Tiered Device Discovery</h2>
+                <p class="text-vibrant-text/90 leading-relaxed mb-6">
+                    A zero-configuration user experience requires a sophisticated matrix of passive fingerprinting and active protocol scanning. The universal controller evaluates traffic across multiple OSI layers.
+                </p>
+                <div class="chart-container h-[350px]">
+                    <canvas id="radarChart"></canvas>
+                </div>
+                <p class="text-center text-sm text-vibrant-muted mt-2">
+                    Comparative analysis of Active Probing vs. Passive Packet Sniffing.
+                </p>
+            </div>
+            
+            <div class="bg-vibrant-card p-6 md:p-8 rounded-2xl shadow-xl shadow-black/50 border border-white/5">
+                <h2 class="text-2xl font-bold mb-6 text-white border-b border-vibrant-muted/20 pb-2">Deployment & Routing Architecture</h2>
+                
+                <div class="flex flex-col space-y-4">
+                    <div class="bg-[#0A192F] p-4 rounded-lg flex items-center gap-4">
+                        <div class="text-3xl text-vibrant-cyan font-black w-12 text-center">1</div>
+                        <div>
+                            <h4 class="font-bold text-white">Passive Fingerprinting (OSI Layer 2/3)</h4>
+                            <p class="text-sm text-vibrant-muted">Intercepts DHCP Options (55/60), HTTP User-Agents, and MAC OUI prefixes to classify "dark" devices silently.</p>
+                        </div>
+                    </div>
+                    <div class="bg-[#0A192F] p-4 rounded-lg flex items-center gap-4 border border-vibrant-magenta/30">
+                        <div class="text-3xl text-vibrant-magenta font-black w-12 text-center">2</div>
+                        <div>
+                            <h4 class="font-bold text-white">Active IP Multicasting (mDNS/SSDP)</h4>
+                            <p class="text-sm text-vibrant-muted">Aggressive UDP broadcasts. Crucially requires `network_mode: host` in Docker to bypass bridge isolation and capture Avahi reflector traffic.</p>
+                        </div>
+                    </div>
+                    <div class="bg-[#0A192F] p-4 rounded-lg flex items-center gap-4">
+                        <div class="text-3xl text-vibrant-yellow font-black w-12 text-center">3</div>
+                        <div>
+                            <h4 class="font-bold text-white">Bidirectional State Engine</h4>
+                            <p class="text-sm text-vibrant-muted">Ingests normalized JSON, routes to hardware-specific drivers, packs protocol payloads, executes locally, and emits WebSocket state-change events.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="bg-vibrant-card p-6 md:p-10 rounded-2xl shadow-xl shadow-black/50 border border-white/5">
+            <h2 class="text-2xl font-bold mb-8 text-white border-b border-vibrant-muted/20 pb-2">Execution Strategy: 9-Month Engineering Roadmap</h2>
+            <p class="text-vibrant-text/90 leading-relaxed mb-8">
+                To transform this architecture into a production-ready, headless plug-in API, a rigorous 5-phase execution plan is established. This methodology ensures scalability, driver stability, and secure credential handling prior to final deployment.
+            </p>
+            
+            <div class="timeline-container">
+                <div class="timeline-item">
+                    <div class="timeline-dot"></div>
+                    <h3 class="text-lg font-bold text-vibrant-cyan mb-1">Phase 1: Architecture & API (Months 1-2)</h3>
+                    <p class="text-vibrant-text/80 text-sm">Database schema entity normalization based on ZCL. RESTful/WebSocket endpoint construction. Docker infrastructure bootstrapping with strictly enforced host networking.</p>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-dot bg-vibrant-magenta shadow-[0_0_10px_#FF00FF]"></div>
+                    <h3 class="text-lg font-bold text-vibrant-magenta mb-1">Phase 2: Discovery Engine (Months 3-4)</h3>
+                    <p class="text-vibrant-text/80 text-sm">Implementation of DHCP passive fingerprinting. Integration of asynchronous mDNS/SSDP IP scanners. Construction of the BLE AD Type 0xFF decoder and ESP32 proxy aggregation endpoints.</p>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-dot bg-vibrant-yellow shadow-[0_0_10px_#FFEA00]"></div>
+                    <h3 class="text-lg font-bold text-vibrant-yellow mb-1">Phase 3: Protocol Translation (Months 5-6)</h3>
+                    <p class="text-vibrant-text/80 text-sm">Development of the core bidirectional drivers. Matter/Thread IPv6 commissioning layer, Yeelight TCP queuing, LIFX binary serialization, and Tuya AES cryptographic handlers.</p>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-dot bg-vibrant-purple shadow-[0_0_10px_#7B1FA2]"></div>
+                    <h3 class="text-lg font-bold text-vibrant-purple mb-1">Phase 4: Manual Provisioning (Months 7-8)</h3>
+                    <p class="text-vibrant-text/80 text-sm">Creation of the secure credentials vault for localized cryptographic keys (Tuya/Xiaomi). Integrator UI for overriding IPs, MACs, and defining explicit target ports for edge devices.</p>
+                </div>
+                <div class="timeline-item">
+                    <div class="timeline-dot bg-white shadow-[0_0_10px_#FFFFFF]"></div>
+                    <h3 class="text-lg font-bold text-white mb-1">Phase 5: Security & Deployment (Month 9)</h3>
+                    <p class="text-vibrant-text/80 text-sm">VLAN penetration validation. Aggressive packet fuzzing of UDP/SSDP endpoints to audit memory stability. Publication of OpenAPI (Swagger) specifications for third-party consumers.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="text-center p-8 mt-12 border-t border-white/10 text-vibrant-muted text-sm">
+        <p>C.O.R.E. Engine Architecture Specifications &bull; Local Execution Only</p>
+    </footer>
+
+    <script>
+        // Data Processing Utility
+        function wrapLabel(label) {
+            if (typeof label !== 'string') return label;
+            if (label.length <= 16) return label;
+            const words = label.split(' ');
+            const lines = [];
+            let currentLine = '';
+            words.forEach(word => {
+                if ((currentLine + word).length > 16) {
+                    if (currentLine) lines.push(currentLine.trim());
+                    currentLine = word + ' ';
+                } else {
+                    currentLine += word + ' ';
+                }
+            });
+            if (currentLine) lines.push(currentLine.trim());
+            return lines;
+        }
+
+        // Shared Tooltip Configuration
+        const standardTooltipConfig = {
+            callbacks: {
+                title: function(tooltipItems) {
+                    const item = tooltipItems[0];
+                    let label = item.chart.data.labels[item.dataIndex];
+                    if (Array.isArray(label)) {
+                        return label.join(' ');
+                    } else {
+                        return label;
+                    }
+                }
+            }
+        };
+
+        // Shared Chart Configuration defaults
+        Chart.defaults.color = '#8892B0';
+        Chart.defaults.font.family = "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif";
+
+        // Chart 1: Donut - Fragmentation
+        const rawFragLabels = ['Proprietary Wi-Fi APIs', 'Legacy Zigbee & Z-Wave', 'Bluetooth Low Energy', 'Matter IPv6 Native'];
+        const fragData = [45, 25, 20, 10];
+        
+        new Chart(document.getElementById('fragmentationChart'), {
+            type: 'doughnut',
+            data: {
+                labels: rawFragLabels.map(wrapLabel),
+                datasets: [{
+                    data: fragData,
+                    backgroundColor: ['#00E5FF', '#FF00FF', '#FFEA00', '#7B1FA2'],
+                    borderWidth: 2,
+                    borderColor: '#112240'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'right', labels: { color: '#E6F1FF' } },
+                    tooltip: standardTooltipConfig
+                },
+                cutout: '65%'
+            }
+        });
+
+        // Chart 2: Bar - Target Ports
+        const portLabelsRaw = ['Govee UDP', 'Tuya TCP/UDP', 'Yeelight TCP', 'LIFX UDP'];
+        const portData = [4001, 6668, 55443, 56700]; // Ordered
+
+        new Chart(document.getElementById('portChart'), {
+            type: 'bar',
+            data: {
+                labels: portLabelsRaw.map(wrapLabel),
+                datasets: [{
+                    label: 'Target Port Number',
+                    data: portData,
+                    backgroundColor: ['#7B1FA2', '#FFEA00', '#00E5FF', '#FF00FF'],
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                indexAxis: 'y', // Horizontal bar for easier reading
+                plugins: {
+                    legend: { display: false },
+                    tooltip: standardTooltipConfig
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        title: { display: true, text: 'Network Port Number', color: '#8892B0' }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { color: '#E6F1FF' }
+                    }
+                }
+            }
+        });
+
+        // Chart 3: Line - BLE Interval
+        new Chart(document.getElementById('bleChart'), {
+            type: 'line',
+            data: {
+                labels: ['0s', '15s', '30s', '45s', '60s', '120s'],
+                datasets: [{
+                    label: 'Advertising Interval (ms)',
+                    data: [40, 40, 40, 800, 800, 800],
+                    borderColor: '#00E5FF',
+                    backgroundColor: 'rgba(0, 229, 255, 0.1)',
+                    borderWidth: 3,
+                    pointBackgroundColor: '#FFEA00',
+                    pointRadius: 5,
+                    fill: true,
+                    stepped: true // Creates the immediate step-down effect described in the text
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: standardTooltipConfig
+                },
+                scales: {
+                    x: {
+                        grid: { display: false },
+                        title: { display: true, text: 'Time since boot (seconds)' }
+                    },
+                    y: {
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        beginAtZero: true,
+                        title: { display: true, text: 'Interval (Milliseconds)' }
+                    }
+                }
+            }
+        });
+
+        // Chart 4: Radar - Active vs Passive
+        const radarLabelsRaw = ['Network Reach / Subnet traversal', 'Hardware Data Accuracy', 'Execution Speed', 'Stealth / Low IDS Trigger', 'Zero-Configuration Setup'];
+        
+        new Chart(document.getElementById('radarChart'), {
+            type: 'radar',
+            data: {
+                labels: radarLabelsRaw.map(wrapLabel),
+                datasets: [{
+                    label: 'Active Multicast (mDNS)',
+                    data: [2, 9, 9, 2, 7],
+                    backgroundColor: 'rgba(255, 0, 255, 0.2)',
+                    borderColor: '#FF00FF',
+                    pointBackgroundColor: '#FF00FF'
+                }, {
+                    label: 'Passive Fingerprinting',
+                    data: [9, 6, 4, 9, 9],
+                    backgroundColor: 'rgba(0, 229, 255, 0.2)',
+                    borderColor: '#00E5FF',
+                    pointBackgroundColor: '#00E5FF'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { color: '#E6F1FF' } },
+                    tooltip: standardTooltipConfig
+                },
+                scales: {
+                    r: {
+                        angleLines: { color: 'rgba(255,255,255,0.1)' },
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        pointLabels: { color: '#8892B0', font: { size: 11 } },
+                        ticks: { display: false, max: 10, min: 0 }
+                    }
+                }
+            }
+        });
+    </script>
+    
+    <!-- Confirming NO SVG / NO MERMAID JS were used. Palette chosen: Energetic & Playful. Narrative structured around Protocol Fragmentation, Local Port Mechanics, BLE Behavior, Discovery Vectors, and 5-Phase Roadmap based directly on the provided analytical document. Chart goals: Donut(Inform), Bar(Compare), Line(Change), Timeline(Organize), Radar(Relationships). -->
+</body>
+</html>

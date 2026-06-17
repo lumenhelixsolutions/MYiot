@@ -1,0 +1,8 @@
+# go2rtc base configuration — streams are added dynamically by the hub.
+log:
+  level: info
+api:
+  listen: ":1984"
+rtsp:
+  listen: ":8554"
+streams: {}
