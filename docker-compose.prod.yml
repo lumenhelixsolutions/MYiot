@@ -1,0 +1,218 @@
+# =============================================================================
+# MYiot — Universal Smart Home Hub
+# Docker Compose Production Override
+# =============================================================================
+# This file extends docker-compose.yml with production-specific settings.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#   # Or use the Makefile:
+#   make deploy-prod
+# =============================================================================
+
+version: "3.9"
+
+x-common-deploy: &common-deploy
+  deploy:
+    restart_policy:
+      condition: any
+      delay: 5s
+      max_attempts: 3
+      window: 120s
+    resources:
+      limits:
+        cpus: "1.0"
+        memory: 512M
+      reservations:
+        cpus: "0.25"
+        memory: 128M
+
+x-common-logging-prod: &common-logging-prod
+  logging:
+    driver: json-file
+    options:
+      max-size: "50m"
+      max-file: "5"
+      labels: "service_name,environment"
+      env: "OS_VERSION,CONTAINER_NAME"
+
+x-traefik-labels: &traefik-labels
+  traefik.enable: "true"
+  traefik.docker.network: "myiot-network"
+  # Redirect HTTP to HTTPS
+  traefik.http.middlewares.https-redirect.redirectscheme.scheme: "https"
+  traefik.http.middlewares.https-redirect.redirectscheme.permanent: "true"
+  # Security headers
+  traefik.http.middlewares.security-headers.headers.customFrameOptionsValue: "SAMEORIGIN"
+  traefik.http.middlewares.security-headers.headers.contentSecurityPolicy: "default-src 'self'"
+  traefik.http.middlewares.security-headers.headers.stsSeconds: "31536000"
+  traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains: "true"
+  traefik.http.middlewares.security-headers.headers.stsPreload: "true"
+  # Rate limiting
+  traefik.http.middlewares.rate-limit.ratelimit.average: "100"
+  traefik.http.middlewares.rate-limit.ratelimit.burst: "50"
+  # Compression
+  traefik.http.middlewares.compression.compress: "true"
+  # Combined middleware
+  traefik.http.middlewares.myiot-default.chain.middlewares: "https-redirect,security-headers,compression"
+
+services:
+  # -------------------------------------------------------------------------
+  # Reverse Proxy — Traefik
+  # -------------------------------------------------------------------------
+  traefik:
+    container_name: myiot-traefik
+    image: traefik:v3.0
+    restart: always
+    security_opt:
+      - no-new-privileges:true
+    ports:
+      - "80:80"
+      - "443:443"
+      - "${TRAEFIK_DASHBOARD_PORT:-8080}:8080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./docker/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./docker/traefik/dynamic:/etc/traefik/dynamic:ro
+      - traefik-certs:/etc/traefik/certs
+      - traefik-logs:/var/log/traefik
+    environment:
+      - TZ=${TZ:-UTC}
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${ACME_EMAIL:-admin@myiot.local}
+    command:
+      # API and Dashboard
+      - --api.dashboard=true
+      - --api.insecure=false
+      - --ping=true
+      # Entry points
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.web.http.redirections.entryPoint.to=websecure
+      - --entrypoints.web.http.redirections.entryPoint.scheme=https
+      - --entrypoints.web.http.redirections.entryPoint.permanent=true
+      # Providers
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=myiot-network
+      - --providers.file.directory=/etc/traefik/dynamic
+      - --providers.file.watch=true
+      # Certificates (Let's Encrypt)
+      - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
+      - --certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/certs/acme.json
+      # Logging
+      - --log.level=${TRAEFIK_LOG_LEVEL:-WARN}
+      - --accesslog=true
+      - --accesslog.filepath=/var/log/traefik/access.log
+    labels:
+      <<: *traefik-labels
+      # Dashboard (optional, restrict access in production)
+      traefik.http.routers.traefik.rule: "Host(`${TRAEFIK_DOMAIN:-traefik.myiot.local}`)"
+      traefik.http.routers.traefik.entrypoints: "websecure"
+      traefik.http.routers.traefik.tls.certresolver: "letsencrypt"
+      traefik.http.routers.traefik.service: "api@internal"
+      traefik.http.routers.traefik.middlewares: "auth@file"
+    networks:
+      - myiot-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8080/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    <<: *common-logging-prod
+
+  # -------------------------------------------------------------------------
+  # Frontend (Production override)
+  # -------------------------------------------------------------------------
+  myiot-frontend:
+    <<: [*common-deploy, *common-logging-prod]
+    build:
+      args:
+        BUILD_ENV: production
+    ports: !reset []
+    labels:
+      <<: *traefik-labels
+      traefik.http.routers.myiot-frontend.rule: "Host(`${MYIOT_DOMAIN:-myiot.local}`)"
+      traefik.http.routers.myiot-frontend.entrypoints: "websecure"
+      traefik.http.routers.myiot-frontend.tls.certresolver: "letsencrypt"
+      traefik.http.routers.myiot-frontend.service: "myiot-frontend"
+      traefik.http.routers.myiot-frontend.middlewares: "myiot-default"
+      traefik.http.services.myiot-frontend.loadbalancer.server.port: "80"
+
+  # -------------------------------------------------------------------------
+  # Backend (Production override)
+  # -------------------------------------------------------------------------
+  myiot-backend:
+    <<: [*common-deploy, *common-logging-prod]
+    ports: !reset []
+    environment:
+      DEBUG: "false"
+      LOG_LEVEL: "INFO"
+      CORS_ORIGINS: "https://${MYIOT_DOMAIN:-myiot.local}"
+    labels:
+      <<: *traefik-labels
+      # REST API
+      traefik.http.routers.myiot-backend.rule: "Host(`${MYIOT_DOMAIN:-myiot.local}`) && PathPrefix(`/api`)"
+      traefik.http.routers.myiot-backend.entrypoints: "websecure"
+      traefik.http.routers.myiot-backend.tls.certresolver: "letsencrypt"
+      traefik.http.routers.myiot-backend.service: "myiot-backend"
+      traefik.http.routers.myiot-backend.middlewares: "myiot-default,rate-limit"
+      traefik.http.services.myiot-backend.loadbalancer.server.port: "8000"
+      # WebSocket (long-lived connections, no rate limiting)
+      traefik.http.routers.myiot-ws.rule: "Host(`${MYIOT_DOMAIN:-myiot.local}`) && PathPrefix(`/ws`)"
+      traefik.http.routers.myiot-ws.entrypoints: "websecure"
+      traefik.http.routers.myiot-ws.tls.certresolver: "letsencrypt"
+      traefik.http.routers.myiot-ws.service: "myiot-backend"
+      traefik.http.routers.myiot-ws.middlewares: "security-headers"
+
+  # -------------------------------------------------------------------------
+  # MQTT (Production override)
+  # -------------------------------------------------------------------------
+  myiot-mqtt:
+    <<: [*common-deploy, *common-logging-prod]
+    volumes:
+      - ./docker/mosquitto/mosquitto.prod.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./docker/mosquitto/passwd:/mosquitto/config/passwd:ro
+      - ./docker/mosquitto/acl:/mosquitto/config/acl:ro
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-logs:/mosquitto/log
+
+  # -------------------------------------------------------------------------
+  # Redis (Production override)
+  # -------------------------------------------------------------------------
+  myiot-redis:
+    <<: [*common-deploy, *common-logging-prod]
+    command: >
+      redis-server
+      --appendonly yes
+      --maxmemory ${REDIS_MAXMEMORY:-256mb}
+      --maxmemory-policy allkeys-lru
+      --requirepass ${REDIS_PASSWORD:-}
+    volumes:
+      - redis-data:/data
+
+  # -------------------------------------------------------------------------
+  # Watchtower — Automated container updates (optional)
+  # -------------------------------------------------------------------------
+  watchtower:
+    container_name: myiot-watchtower
+    image: containrrr/watchtower:latest
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - TZ=${TZ:-UTC}
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_INCLUDE_STOPPED=true
+      - WATCHTOWER_REVIVE_STOPPED=false
+      - WATCHTOWER_SCHEDULE=0 0 3 * * *
+      - WATCHTOWER_NOTIFICATIONS=shoutrrr
+      - WATCHTOWER_NOTIFICATION_URL=${WATCHTOWER_NOTIFY_URL:-}
+      - WATCHTOWER_NOTIFICATION_TITLE_TAG=${MYIOT_DOMAIN:-myiot.local}
+    <<: *common-logging-prod
+
+volumes:
+  traefik-certs:
+    name: traefik-certs
+  traefik-logs:
+    name: traefik-logs

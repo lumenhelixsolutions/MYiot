@@ -1,0 +1,243 @@
+# =============================================================================
+# MYiot — Universal Smart Home Hub
+# Docker Compose Development Configuration
+# =============================================================================
+# Brand Colors: #081021 (Deep Space Slate) | #6366F1 (Electric Indigo)
+#               #06B6D4 (Cyan Glow) | #F59E0B (Warm Amber)
+# =============================================================================
+#
+# Quick Start:
+#   cp .env.example .env   # Edit with your values
+#   make docker-up         # Or: docker compose up -d
+#
+# Services:
+#   - myiot-frontend: Nginx serving the React SPA
+#   - myiot-backend:  FastAPI backend with uvicorn
+#   - myiot-mqtt:     Eclipse Mosquitto MQTT broker
+#   - myiot-redis:    Redis cache / message broker
+#
+# Optional services (commented out):
+#   - myiot-frigate:  Frigate NVR for camera management
+#   - myiot-zigbee:   Zigbee2MQTT for Zigbee device support
+# =============================================================================
+
+version: "3.9"
+
+x-common-variables: &common-vars
+  TZ: ${TZ:-UTC}
+  PUID: ${PUID:-1000}
+  PGID: ${PGID:-1000}
+
+x-common-restart: &common-restart
+  restart: unless-stopped
+
+x-common-logging: &common-logging
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+networks:
+  myiot-network:
+    name: myiot-network
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
+
+volumes:
+  myiot-data:
+    name: myiot-data
+  myiot-db:
+    name: myiot-db
+  mosquitto-data:
+    name: mosquitto-data
+  mosquitto-logs:
+    name: mosquitto-logs
+  redis-data:
+    name: redis-data
+
+services:
+  # -------------------------------------------------------------------------
+  # Frontend — Nginx serving the React SPA
+  # -------------------------------------------------------------------------
+  myiot-frontend:
+    container_name: myiot-frontend
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: frontend-builder
+    <<: [*common-restart, *common-logging]
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"
+    environment:
+      <<: *common-vars
+      VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+      VITE_WS_URL: ${VITE_WS_URL:-ws://localhost:8000/ws}
+    depends_on:
+      myiot-backend:
+        condition: service_healthy
+    networks:
+      - myiot-network
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # -------------------------------------------------------------------------
+  # Backend — FastAPI + Uvicorn
+  # -------------------------------------------------------------------------
+  myiot-backend:
+    container_name: myiot-backend
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    <<: [*common-restart, *common-logging]
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      <<: *common-vars
+      DATABASE_URL: ${DATABASE_URL:-sqlite+aiosqlite:///./data/myiot.db}
+      REDIS_URL: redis://myiot-redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-change-me-in-production}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      MQTT_HOST: myiot-mqtt
+      MQTT_PORT: 1883
+      MQTT_USER: ${MQTT_USER:-myiot}
+      MQTT_PASS: ${MQTT_PASS:-change-me}
+      FRIGATE_URL: ${FRIGATE_URL:-http://localhost:5000}
+      FRIGATE_API_KEY: ${FRIGATE_API_KEY:-}
+      DEBUG: ${DEBUG:-false}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8080,http://localhost:5173}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1}
+    volumes:
+      - myiot-data:/app/data
+      - myiot-db:/app/db
+    depends_on:
+      myiot-redis:
+        condition: service_healthy
+      myiot-mqtt:
+        condition: service_started
+    networks:
+      - myiot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+  # -------------------------------------------------------------------------
+  # MQTT Broker — Eclipse Mosquitto
+  # -------------------------------------------------------------------------
+  myiot-mqtt:
+    container_name: myiot-mqtt
+    image: eclipse-mosquitto:2
+    <<: [*common-restart, *common-logging]
+    ports:
+      - "${MQTT_PORT:-1883}:1883"
+      - "${MQTT_WS_PORT:-9001}:9001"
+    volumes:
+      - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mosquitto-data:/mosquitto/data
+      - mosquitto-logs:/mosquitto/log
+    environment:
+      <<: *common-vars
+    networks:
+      - myiot-network
+
+  # -------------------------------------------------------------------------
+  # Redis — Cache and message broker
+  # -------------------------------------------------------------------------
+  myiot-redis:
+    container_name: myiot-redis
+    image: redis:7-alpine
+    <<: [*common-restart, *common-logging]
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis-data:/data
+    environment:
+      <<: *common-vars
+    networks:
+      - myiot-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  # =========================================================================
+  # OPTIONAL SERVICES — Uncomment to enable
+  # =========================================================================
+
+  # -------------------------------------------------------------------------
+  # Frigate NVR — Network Video Recorder for camera management
+  # -------------------------------------------------------------------------
+  # myiot-frigate:
+  #   container_name: myiot-frigate
+  #   image: ghcr.io/blakeblackshear/frigate:stable
+  #   <<: *common-restart
+  #   privileged: true
+  #   ports:
+  #     - "${FRIGATE_PORT:-5000}:5000"
+  #     - "${FRIGATE_RTSP_PORT:-8554}:8554"
+  #   volumes:
+  #     - ./docker/frigate/frigate.yml:/config/config.yml:ro
+  #     - frigate-data:/media/frigate
+  #     - /etc/localtime:/etc/localtime:ro
+  #   environment:
+  #     <<: *common-vars
+  #     FRIGATE_RTSP_PASSWORD: ${FRIGATE_RTSP_PASSWORD:-}
+  #   devices:
+  #     - /dev/dri:/dev/dri  # Intel GPU acceleration
+  #     # - /dev/video11:/dev/video11  # Raspberry Pi GPU
+  #   networks:
+  #     - myiot-network
+
+  # -------------------------------------------------------------------------
+  # Zigbee2MQTT — Zigbee device integration
+  # -------------------------------------------------------------------------
+  # myiot-zigbee:
+  #   container_name: myiot-zigbee
+  #   image: koenkk/zigbee2mqtt:latest
+  #   <<: *common-restart
+  #   ports:
+  #     - "${ZIGBEE_FRONTEND_PORT:-8081}:8080"
+  #   volumes:
+  #     - ./docker/zigbee2mqtt:/app/data
+  #     - /run/udev:/run/udev:ro
+  #   environment:
+  #     <<: *common-vars
+  #   devices:
+  #     - ${ZIGBEE_ADAPTER_PORT:-/dev/ttyUSB0}:/dev/ttyUSB0
+  #   networks:
+  #     - myiot-network
+
+  # -------------------------------------------------------------------------
+  # PostgreSQL — Production-grade database (alternative to SQLite)
+  # -------------------------------------------------------------------------
+  # myiot-postgres:
+  #   container_name: myiot-postgres
+  #   image: postgres:16-alpine
+  #   <<: [*common-restart, *common-logging]
+  #   ports:
+  #     - "${POSTGRES_PORT:-5432}:5432"
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+  #   environment:
+  #     <<: *common-vars
+  #     POSTGRES_DB: myiot
+  #     POSTGRES_USER: ${POSTGRES_USER:-myiot}
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me}
+  #   networks:
+  #     - myiot-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U myiot"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 5
