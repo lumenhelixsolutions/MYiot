@@ -31,3 +31,6 @@ data/*.db
 data/*.db-journal
 data/*.key
 data/*.secret_key
+
+# Superpowers brainstorming mockups
+.superpowers/
