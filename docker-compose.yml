@@ -1,9 +1,49 @@
+# =============================================================================
+# MYiot — Universal Smart Home Hub
+# Docker Compose Development Configuration
+# =============================================================================
+# Quick Start:
+#   cp hub/.env.example hub/.env   # Edit with your values
+#   docker compose up -d
+#
+# Services:
+#   - myiot-hub:      FastAPI backend with uvicorn
+#   - myiot-frontend: Vite React development server
+#   - myiot-go2rtc:   RTSP → MJPEG/WebRTC proxy for camera streaming
+#
+# Optional services (commented out until implemented):
+#   - myiot-redis:    Redis cache / message broker
+#   - myiot-mqtt:     Eclipse Mosquitto MQTT broker
+#   - myiot-frigate:  Frigate NVR for camera AI detection
+#   - myiot-zigbee:   Zigbee2MQTT for Zigbee device support
+#   - myiot-postgres: PostgreSQL production database
+# =============================================================================
+
 version: "3.9"
 
+x-common-variables: &common-vars
+  TZ: ${TZ:-UTC}
+
+x-common-restart: &common-restart
+  restart: unless-stopped
+
+networks:
+  myiot-network:
+    name: myiot-network
+    driver: bridge
+
+volumes:
+  hub-data:
+    name: hub-data
+
 services:
-  hub:
+  # -------------------------------------------------------------------------
+  # Backend — FastAPI + Uvicorn
+  # -------------------------------------------------------------------------
+  myiot-hub:
     build: ./hub
     container_name: myiot-hub
+    <<: *common-restart
     ports:
       - "8000:8000"
     volumes:
@@ -12,20 +52,31 @@ services:
     env_file:
       - ./hub/.env
     environment:
+      <<: *common-vars
       - DEBUG=true
       - SEED_DEMO_DEVICES=false
-      - GO2RTC_URL=http://go2rtc:1984
+      - GO2RTC_URL=http://myiot-go2rtc:1984
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
-      - go2rtc
+      - myiot-go2rtc
     networks:
-      - myiot
+      - myiot-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
 
-  frontend:
+  # -------------------------------------------------------------------------
+  # Frontend — Vite React dev server
+  # -------------------------------------------------------------------------
+  myiot-frontend:
     build:
       context: ./app
       dockerfile: Dockerfile.dev
     container_name: myiot-frontend
+    <<: *common-restart
     ports:
       - "5173:5173"
     volumes:
@@ -35,25 +86,111 @@ services:
       - VITE_API_URL=http://localhost:8000
     command: npm run dev -- --host
     networks:
-      - myiot
+      - myiot-network
 
-  go2rtc:
+  # -------------------------------------------------------------------------
+  # go2rtc — RTSP to MJPEG/WebRTC proxy
+  # -------------------------------------------------------------------------
+  myiot-go2rtc:
     image: alexxit/go2rtc:latest
     container_name: myiot-go2rtc
+    <<: *common-restart
     ports:
       - "1984:1984"
       - "8554:8554"
     volumes:
       - ./data/go2rtc.yaml:/config/go2rtc.yaml
     environment:
-      - TZ=UTC
+      <<: *common-vars
     networks:
-      - myiot
-    restart: unless-stopped
+      - myiot-network
 
-volumes:
-  hub-data:
+  # =========================================================================
+  # OPTIONAL SERVICES — Uncomment when backend support is implemented
+  # =========================================================================
 
-networks:
-  myiot:
-    driver: bridge
+  # -------------------------------------------------------------------------
+  # Redis — Cache and message broker
+  # -------------------------------------------------------------------------
+  # myiot-redis:
+  #   container_name: myiot-redis
+  #   image: redis:7-alpine
+  #   <<: *common-restart
+  #   command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+  #   networks:
+  #     - myiot-network
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 3
+
+  # -------------------------------------------------------------------------
+  # MQTT Broker — Eclipse Mosquitto
+  # -------------------------------------------------------------------------
+  # myiot-mqtt:
+  #   container_name: myiot-mqtt
+  #   image: eclipse-mosquitto:2
+  #   <<: *common-restart
+  #   ports:
+  #     - "1883:1883"
+  #     - "9001:9001"
+  #   volumes:
+  #     - ./docker/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+  #   networks:
+  #     - myiot-network
+
+  # -------------------------------------------------------------------------
+  # Frigate NVR — Network Video Recorder for camera AI detection
+  # -------------------------------------------------------------------------
+  # myiot-frigate:
+  #   container_name: myiot-frigate
+  #   image: ghcr.io/blakeblackshear/frigate:stable
+  #   <<: *common-restart
+  #   privileged: true
+  #   ports:
+  #     - "5000:5000"
+  #     - "8554:8554"
+  #   volumes:
+  #     - ./docker/frigate/frigate.yml:/config/config.yml:ro
+  #     - /etc/localtime:/etc/localtime:ro
+  #   networks:
+  #     - myiot-network
+
+  # -------------------------------------------------------------------------
+  # Zigbee2MQTT — Zigbee device integration
+  # -------------------------------------------------------------------------
+  # myiot-zigbee:
+  #   container_name: myiot-zigbee
+  #   image: koenkk/zigbee2mqtt:latest
+  #   <<: *common-restart
+  #   ports:
+  #     - "8081:8080"
+  #   volumes:
+  #     - ./docker/zigbee2mqtt:/app/data
+  #     - /run/udev:/run/udev:ro
+  #   devices:
+  #     - /dev/ttyUSB0:/dev/ttyUSB0
+  #   networks:
+  #     - myiot-network
+
+  # -------------------------------------------------------------------------
+  # PostgreSQL — Production-grade database (alternative to SQLite)
+  # -------------------------------------------------------------------------
+  # myiot-postgres:
+  #   container_name: myiot-postgres
+  #   image: postgres:16-alpine
+  #   <<: *common-restart
+  #   ports:
+  #     - "5432:5432"
+  #   environment:
+  #     POSTGRES_DB: myiot
+  #     POSTGRES_USER: myiot
+  #     POSTGRES_PASSWORD: change-me
+  #   networks:
+  #     - myiot-network
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U myiot"]
+  #     interval: 10s
+  #     timeout: 3s
+  #     retries: 5
