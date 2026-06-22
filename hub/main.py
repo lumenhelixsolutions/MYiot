@@ -38,6 +38,7 @@ from api import routes as api_routes
 from api import websocket as api_websocket
 from api import camera_stream as camera_api
 from api import discovery_routes as discovery_api
+from api import validation_routes as validation_api
 from services.ws_hub import WebSocketHub
 
 # ─── Logging Setup ────────────────────────────────────────────────────────
@@ -349,6 +350,7 @@ app.add_middleware(
 # Include REST API routes
 app.include_router(api_routes.router)
 app.include_router(discovery_api.router)
+app.include_router(validation_api.router)
 
 # Include WebSocket routes
 app.include_router(api_websocket.router)

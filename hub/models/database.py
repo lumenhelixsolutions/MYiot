@@ -12,6 +12,7 @@ import time
 from typing import AsyncGenerator, Optional
 
 from sqlalchemy import (
+    ForeignKey,
     JSON,
     Boolean,
     Column,
@@ -351,3 +352,157 @@ async def update_device_state(
             last_seen_at=time.time(),
         )
         session.add(db_device)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  NEW: Validation & Trust-Score Models (integrated into existing MYiot hub)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+from uuid import uuid4
+
+
+class DiscoveryCandidate(Base):
+    """An unverified device found by a scanner.  Persisted to the DB so
+    findings survive restarts and can be inspected / validated later.
+    """
+
+    __tablename__ = "discovery_candidates"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    source_scanner = Column(String(50), nullable=False, index=True)
+    priority = Column(Integer, default=100)
+
+    ip_address = Column(String(45), nullable=True, index=True)
+    port = Column(Integer, nullable=True)
+    mac_address = Column(String(17), nullable=True, index=True)
+
+    raw_response = Column(String, nullable=True)          # SSDP / mDNS raw payload
+    proposed_protocol = Column(String(50), nullable=True)
+    proposed_name = Column(String(255), nullable=True)
+
+    # Three-gate validation tracking
+    fingerprint_hash = Column(String(64), nullable=True)
+    gate_1_fingerprint = Column(Boolean, default=False)     # Gate 1 passed
+    gate_2_authenticated = Column(Boolean, default=False)   # Gate 2 passed
+    gate_3_capabilities = Column(Boolean, default=False)    # Gate 3 passed
+
+    validation_status = Column(
+        String(20), default="pending", index=True
+    )  # pending | fingerprinting | awaiting_auth | verified | rejected
+    rejection_reason = Column(String, nullable=True)
+    trust_score = Column(Integer, default=0)              # 0-100
+
+    discovered_at = Column(Float, nullable=False, default=time.time)
+    last_probed_at = Column(Float, nullable=True)
+    last_validated_at = Column(Float, nullable=True)
+
+    # Link to the promoted DeviceConfig row (if promoted)
+    device_id = Column(String, ForeignKey("devices.device_id"), nullable=True, index=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "source_scanner": self.source_scanner,
+            "priority": self.priority,
+            "ip_address": self.ip_address,
+            "port": self.port,
+            "mac_address": self.mac_address,
+            "proposed_protocol": self.proposed_protocol,
+            "proposed_name": self.proposed_name,
+            "fingerprint_hash": self.fingerprint_hash,
+            "gate_1_fingerprint": self.gate_1_fingerprint,
+            "gate_2_authenticated": self.gate_2_authenticated,
+            "gate_3_capabilities": self.gate_3_capabilities,
+            "validation_status": self.validation_status,
+            "rejection_reason": self.rejection_reason,
+            "trust_score": self.trust_score,
+            "discovered_at": self.discovered_at,
+            "last_probed_at": self.last_probed_at,
+            "last_validated_at": self.last_validated_at,
+            "device_id": self.device_id,
+        }
+
+
+class Capability(Base):
+    """A verified feature of a device."""
+
+    __tablename__ = "capabilities"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    device_id = Column(String, ForeignKey("devices.device_id"), nullable=False, index=True)
+    type = Column(String(50), nullable=False, index=True)
+    protocol = Column(String(50), nullable=False)
+    properties = Column(JSON, default=dict)
+    read_only = Column(Boolean, default=False)
+    commands = Column(JSON, default=list)
+    verification_status = Column(String(20), default="unverified")  # unverified | verified | failed
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "device_id": self.device_id,
+            "type": self.type,
+            "protocol": self.protocol,
+            "properties": self.properties,
+            "read_only": self.read_only,
+            "commands": self.commands,
+            "verification_status": self.verification_status,
+        }
+
+
+class AuthCredential(Base):
+    """Stored authentication credentials for a device."""
+
+    __tablename__ = "auth_credentials"
+
+    id = Column(String(36), primary_key=True, default=lambda: str(uuid4()))
+    device_id = Column(String, ForeignKey("devices.device_id"), nullable=False, index=True)
+    method = Column(String(30), nullable=False)  # oauth2 | api_key | cert | pin | challenge_response
+    encrypted_token = Column(String, nullable=True)
+    cert_hash = Column(String(64), nullable=True)
+    expires_at = Column(Float, nullable=True)
+    scopes = Column(JSON, default=list)
+    last_used = Column(Float, nullable=True)
+    rotation_due = Column(Float, nullable=True)
+    is_active = Column(Boolean, default=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "device_id": self.device_id,
+            "method": self.method,
+            "expires_at": self.expires_at,
+            "scopes": self.scopes,
+            "last_used": self.last_used,
+            "rotation_due": self.rotation_due,
+            "is_active": self.is_active,
+        }
+
+
+class TrustScore(Base):
+    """Immutable trust score history for a device."""
+
+    __tablename__ = "trust_scores"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    device_id = Column(String, ForeignKey("devices.device_id"), nullable=False, index=True)
+    score = Column(Integer, nullable=False)
+    computed_at = Column(Float, nullable=False, default=time.time)
+    gate_1 = Column(Integer, default=0)   # 0-30
+    gate_2 = Column(Integer, default=0)   # 0-40
+    gate_3 = Column(Integer, default=0)   # 0-30
+    deductions = Column(Integer, default=0)
+    details = Column(JSON, nullable=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "device_id": self.device_id,
+            "score": self.score,
+            "computed_at": self.computed_at,
+            "gate_1": self.gate_1,
+            "gate_2": self.gate_2,
+            "gate_3": self.gate_3,
+            "deductions": self.deductions,
+            "details": self.details,
+        }

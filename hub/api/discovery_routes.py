@@ -110,6 +110,58 @@ async def register_discovered_device(
     if device_type == "camera" and ip and not stream_url:
         stream_url = f"rtsp://{ip}:554/live"
 
+    # ── VALIDATION GATE ──  NEW: require 3-gate validation before promotion
+    async for session in get_db_session():
+        from sqlalchemy import select
+        from models.database import DiscoveryCandidate
+        from services.validation import MIN_TRUST_FOR_CONTROL
+
+        result = await session.execute(
+            select(DiscoveryCandidate).where(DiscoveryCandidate.id == device_id)
+        )
+        candidate = result.scalar_one_or_none()
+
+        if candidate is None:
+            # No DB candidate found — device was discovered in-memory only.
+            # Persist it first so validation can run on it.
+            candidate = DiscoveryCandidate(
+                id=device_id,
+                source_scanner=pending.get("source_scanner", "unknown"),
+                priority=50,
+                ip_address=ip,
+                port=pending.get("port"),
+                mac_address=pending.get("mac_address"),
+                proposed_protocol=pending.get("protocol", "SSDP"),
+                proposed_name=name,
+                validation_status="pending",
+                trust_score=0,
+                discovered_at=time.time(),
+                last_probed_at=time.time(),
+            )
+            session.add(candidate)
+            await session.commit()
+            raise HTTPException(
+                status_code=403,
+                detail="Device must be validated before registration. "
+                       f"POST /api/validation/validate/{device_id} first.",
+            )
+
+        if candidate.validation_status != "verified":
+            raise HTTPException(
+                status_code=403,
+                detail=f"Device validation status is '{candidate.validation_status}'. "
+                       f"Run POST /api/validation/validate/{device_id} first.",
+            )
+
+        if candidate.trust_score < MIN_TRUST_FOR_CONTROL:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Trust score {candidate.trust_score} is below minimum {MIN_TRUST_FOR_CONTROL}. "
+                       f"Re-run validation or investigate why the device failed gates.",
+            )
+
+        break  # session consumed by the for-loop
+
     device_state = DeviceState(
         device_id=device_id,
         manufacturer=_display_manufacturer(manufacturer_key),
