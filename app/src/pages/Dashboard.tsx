@@ -59,7 +59,7 @@ export default function Dashboard() {
           { label: 'Alerts', value: unackAlerts.length, icon: Zap, color: '#f59e0b' },
         ].map((s, i) => (
           <motion.div key={s.label} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.04 * i, duration: 0.35 }}
-            className="rounded-2xl p-5" style={{ backgroundColor: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
+            className="stat-card">
             <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl" style={{ backgroundColor: `${s.color}15` }}>
               <s.icon className="h-5 w-5" style={{ color: s.color }} />
             </div>

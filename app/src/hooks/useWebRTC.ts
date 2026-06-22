@@ -33,14 +33,18 @@ function waitForIceGathering(pc: RTCPeerConnection): Promise<void> {
  * attempts to negotiate a WebRTC session with the backend; if it fails,
  * `active` remains false so the caller can fall back to MJPEG.
  */
-export function useWebRTC(cameraId: string | null | undefined, enabled = true) {
+export function useWebRTC(
+  cameraId: string | null | undefined,
+  enabled = true,
+  preferWebRtc = true,
+) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const [active, setActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!cameraId || !enabled) {
+    if (!cameraId || !enabled || !preferWebRtc) {
       setActive(false);
       setError(null);
       return;
@@ -106,7 +110,7 @@ export function useWebRTC(cameraId: string | null | undefined, enabled = true) {
         videoRef.current.srcObject = null;
       }
     };
-  }, [cameraId, enabled]);
+  }, [cameraId, enabled, preferWebRtc]);
 
   return { videoRef, active, error };
 }

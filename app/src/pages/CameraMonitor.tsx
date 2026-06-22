@@ -64,6 +64,22 @@ export default function CameraMonitor() {
 
   const gridCols = layouts.find(l => l.key === layout)?.cols || 'grid-cols-2';
 
+  const visibleCameras = useMemo(() => {
+    if (layout === '1+2') return cameras.slice(0, 3);
+    if (layout === '2+1') return cameras.slice(0, 3);
+    if (layout === '3x3') return cameras.slice(0, 9);
+    if (layout === '1x1') return cameras.slice(0, 1);
+    return cameras.slice(0, 4);
+  }, [cameras, layout]);
+
+  const webrtcSlots = useMemo(() => {
+    const slots = new Set<string>();
+    visibleCameras.slice(0, 2).forEach(c => slots.add(c.id));
+    if (activeCam) slots.add(activeCam);
+    if (fullscreenCam) slots.add(fullscreenCam);
+    return slots;
+  }, [visibleCameras, activeCam, fullscreenCam]);
+
   const renderFeed = (cam: typeof cameras[0], isLarge?: boolean) => {
     const p = getPtz(cam.id);
     const rec = recordingNow[cam.id];
@@ -78,6 +94,7 @@ export default function CameraMonitor() {
             name={cam.name}
             fallbackSrc={`/api/cameras/${cam.id}/mjpeg`}
             enabled={useBackend}
+            preferWebRtc={webrtcSlots.has(cam.id)}
             className="absolute inset-0 h-full w-full object-cover"
           />
         ) : (
@@ -114,7 +131,7 @@ export default function CameraMonitor() {
       {/* Main */}
       <div className="flex flex-1 flex-col gap-4">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="glass-card flex items-center justify-between rounded-2xl px-4 py-3">
           <div className="flex items-center gap-2">
             {layouts.map(l => (
               <button key={l.key} onClick={() => setLayout(l.key)} className="rounded-lg px-3 py-1.5 text-xs font-medium transition-all" style={{ backgroundColor: layout === l.key ? 'var(--accent-primary)' : 'var(--bg-surface)', color: layout === l.key ? '#fff' : 'var(--text-muted)', border: `1px solid ${layout === l.key ? 'var(--accent-primary)' : 'var(--border-subtle)'}` }}>{l.label}</button>
@@ -128,9 +145,9 @@ export default function CameraMonitor() {
 
         {/* Grid */}
         <div className={`grid ${gridCols} gap-3`} style={{ aspectRatio: layout === '1x1' ? '16/9' : undefined }}>
-          {layout === '1+2' && cameras[0] && <>{renderFeed(cameras[0], true)}{cameras.slice(1, 3).map(c => renderFeed(c))}</>}
-          {layout === '2+1' && cameras[2] && <>{cameras.slice(0, 2).map(c => renderFeed(c))}{renderFeed(cameras[2], true)}</>}
-          {layout !== '1+2' && layout !== '2+1' && cameras.slice(0, layout === '3x3' ? 9 : layout === '1x1' ? 1 : 4).map(c => renderFeed(c))}
+          {layout === '1+2' && visibleCameras[0] && <>{renderFeed(visibleCameras[0], true)}{visibleCameras.slice(1, 3).map(c => renderFeed(c))}</>}
+          {layout === '2+1' && visibleCameras[2] && <>{visibleCameras.slice(0, 2).map(c => renderFeed(c))}{renderFeed(visibleCameras[2], true)}</>}
+          {layout !== '1+2' && layout !== '2+1' && visibleCameras.map(c => renderFeed(c))}
         </div>
       </div>
 
@@ -302,6 +319,7 @@ export default function CameraMonitor() {
                   name={cam.name}
                   fallbackSrc={`/api/cameras/${cam.id}/mjpeg`}
                   enabled={backendSync.connected}
+                  preferWebRtc
                   className="absolute inset-0 h-full w-full object-cover"
                 />
               ) : (

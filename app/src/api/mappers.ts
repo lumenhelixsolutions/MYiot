@@ -40,3 +40,60 @@ export function mapDeviceState(state: BackendDeviceState): Device {
 export function mapDeviceStates(states: BackendDeviceState[]): Device[] {
   return states.map(mapDeviceState);
 }
+
+/** Normalize WebSocket state_change payloads from the hub. */
+export function mapWsStateChange(msg: Record<string, unknown>): Device | null {
+  const raw = (msg.state as BackendDeviceState | undefined)
+    ?? ({
+      device_id: msg.device_id,
+      manufacturer: '',
+      model: '',
+      device_type: 'plug',
+      online: true,
+      state: {},
+      last_updated: Date.now() / 1000,
+    } as BackendDeviceState);
+
+  if (!raw?.device_id && !msg.device_id) return null;
+
+  const normalized: BackendDeviceState = {
+    ...raw,
+    device_id: String(raw.device_id || msg.device_id),
+  };
+  return mapDeviceState(normalized);
+}
+
+export interface BackendDiscoveredDevice {
+  id: string;
+  device_id: string;
+  name: string;
+  manufacturer: string;
+  manufacturer_key?: string;
+  model?: string;
+  type: DeviceType;
+  device_type?: DeviceType;
+  ip_address: string;
+  protocol: string;
+  mac_address?: string;
+  firmware?: string;
+  signal_strength: number;
+  scan_phase: string;
+  stream_url?: string;
+}
+
+export function mapDiscoveredDevice(raw: BackendDiscoveredDevice) {
+  const type = (raw.type || raw.device_type || 'plug') as DeviceType;
+  return {
+    id: raw.id || raw.device_id,
+    name: raw.name,
+    manufacturer: raw.manufacturer,
+    type,
+    ipAddress: raw.ip_address,
+    protocol: raw.protocol,
+    signalStrength: raw.signal_strength ?? 0,
+    scanPhase: (raw.scan_phase || 'probing') as import('@/types').ScanPhase,
+    macAddress: raw.mac_address || '',
+    firmware: raw.firmware || 'unknown',
+    streamUrl: raw.stream_url,
+  };
+}

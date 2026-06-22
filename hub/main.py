@@ -37,6 +37,8 @@ from services.device_manager import DeviceManager
 from api import routes as api_routes
 from api import websocket as api_websocket
 from api import camera_stream as camera_api
+from api import discovery_routes as discovery_api
+from services.ws_hub import WebSocketHub
 
 # ─── Logging Setup ────────────────────────────────────────────────────────
 
@@ -54,32 +56,24 @@ async def _handle_device_found(device_info: Dict[str, Any], app: FastAPI) -> Non
     """
     Callback invoked when the discovery listener finds a new device.
 
-    Creates or updates the device state in the registry and logs
-    the discovery event.
+    Devices land in the discovery pending buffer first; registration onto
+    the hub registry happens via POST /api/discovery/register/{device_id}.
     """
-    registry: StateRegistry = app.state.registry
-
     device_id = device_info.get("device_id") or device_info.get("usn", "unknown")
     manufacturer = device_info.get("manufacturer", "unknown")
     device_type = device_info.get("device_type", "unknown")
-    model = device_info.get("model", "unknown")
-
-    from core.base_driver import DeviceState
-
-    device_state = DeviceState(
-        device_id=device_id,
-        manufacturer=manufacturer,
-        model=model,
-        device_type=device_type,
-        online=True,
-        state=device_info.get("state", {}),
-        last_updated=time.time(),
-    )
-
-    await registry.update(device_id, device_state)
     logger.info(
-        "Device discovered: %s (%s / %s)", device_id, manufacturer, device_type
+        "Device discovered (pending): %s (%s / %s)",
+        device_id,
+        manufacturer,
+        device_type,
     )
+
+
+async def _handle_discovery_event(event: Dict[str, Any], app: FastAPI) -> None:
+    """Broadcast discovery scan progress and pending devices to all WS clients."""
+    ws_hub: WebSocketHub = app.state.ws_hub
+    await ws_hub.broadcast(event)
 
 
 async def _seed_devices(registry: StateRegistry) -> None:
@@ -237,12 +231,22 @@ async def lifespan(app: FastAPI):
     app.state.persistence_adapter.attach(app.state.registry)
     logger.info("State persistence adapter attached")
 
+    app.state.ws_hub = WebSocketHub()
+
     # Initialize network discovery listener
+    async def on_device_found(device_info: Dict[str, Any]) -> None:
+        await _handle_device_found(device_info, app)
+
+    async def on_state_change(device_info: Dict[str, Any]) -> None:
+        await _handle_state_change(device_info, app)
+
+    async def on_discovery_event(event: Dict[str, Any]) -> None:
+        await _handle_discovery_event(event, app)
+
     app.state.discovery = NetworkDiscoveryListener(
-        on_device_found=lambda d: asyncio.create_task(_handle_device_found(d, app)),
-        on_state_change=lambda d: asyncio.create_task(
-            _handle_state_change(d, app)
-        ),
+        on_device_found=on_device_found,
+        on_state_change=on_state_change,
+        on_event=on_discovery_event,
     )
 
     # Initialize actuation dispatcher
@@ -331,7 +335,12 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -339,6 +348,7 @@ app.add_middleware(
 
 # Include REST API routes
 app.include_router(api_routes.router)
+app.include_router(discovery_api.router)
 
 # Include WebSocket routes
 app.include_router(api_websocket.router)

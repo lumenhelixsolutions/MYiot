@@ -6,6 +6,7 @@ interface WebRtcFeedProps {
   className?: string;
   fallbackSrc: string;
   enabled?: boolean;
+  preferWebRtc?: boolean;
 }
 
 /**
@@ -21,8 +22,9 @@ export default function WebRtcFeed({
   className = '',
   fallbackSrc,
   enabled = true,
+  preferWebRtc = true,
 }: WebRtcFeedProps) {
-  const { videoRef, active, error } = useWebRTC(cameraId, enabled);
+  const { videoRef, active, error } = useWebRTC(cameraId, enabled, preferWebRtc);
 
   if (!active) {
     return (

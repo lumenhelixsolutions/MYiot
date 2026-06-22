@@ -4,7 +4,7 @@ import TopBar from './TopBar';
 
 export default function Layout({ children }: { children: ReactNode }) {
   return (
-    <div className="flex h-screen w-screen" style={{ backgroundColor: 'var(--bg-base)' }}>
+    <div className="ambient-mesh flex h-screen w-screen" style={{ backgroundColor: 'var(--bg-base)' }}>
       <Sidebar />
       <div className="ml-[220px] flex flex-1 flex-col overflow-hidden">
         <TopBar />

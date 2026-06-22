@@ -19,6 +19,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+def _get_ws_hub(websocket: WebSocket):
+    return websocket.app.state.ws_hub
+
+
 class WebSocketClient:
     """
     Represents a connected WebSocket client session.
@@ -96,6 +100,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     )
     await websocket.accept()
 
+    ws_hub = _get_ws_hub(websocket)
+    await ws_hub.connect(websocket)
+
     client = WebSocketClient(websocket, client_id)
     client.set_connected(True)
 
@@ -122,6 +129,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         # Cleanup: unsubscribe from registry
         client.set_connected(False)
         registry.unsubscribe(listener)
+        await ws_hub.disconnect(websocket)
         logger.debug("WebSocket client %s cleaned up", client_id)
 
 

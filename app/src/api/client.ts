@@ -58,6 +58,26 @@ export const api = {
 
   // Health
   health: () => req<{ status: string; devices_registered: number }>('/health'),
+
+  // Cameras
+  listCameras: () => req<any[]>('/api/cameras'),
+
+  // Discovery
+  discoveryStatus: () => req<{
+    active: boolean;
+    progress: number;
+    message: string;
+    protocols: string[];
+    devices_found: number;
+  }>('/api/discovery/status'),
+  listDiscovered: () => req<any[]>('/api/discovery/devices'),
+  startDiscoveryScan: () => req<any>('/api/discovery/scan', { method: 'POST' }),
+  stopDiscoveryScan: () => req<any>('/api/discovery/scan/stop', { method: 'POST' }),
+  registerDiscovered: (deviceId: string, body?: { name?: string; room?: string }) =>
+    req<{ success: boolean; device_id: string; name: string }>(
+      `/api/discovery/register/${encodeURIComponent(deviceId)}`,
+      { method: 'POST', body: JSON.stringify(body || {}) },
+    ),
 };
 
 export type { ApiResponse };

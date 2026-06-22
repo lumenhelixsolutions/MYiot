@@ -54,7 +54,7 @@ services:
     environment:
       <<: *common-vars
       - DEBUG=true
-      - SEED_DEMO_DEVICES=false
+      - SEED_DEMO_DEVICES=true
       - GO2RTC_URL=http://myiot-go2rtc:1984
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:

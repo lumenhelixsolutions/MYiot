@@ -137,6 +137,8 @@ interface AppState {
   discoveredDevices: DiscoveredDevice[];
   searchQuery: string;
   scanActive: boolean;
+  discoveryProgress: number;
+  discoveryMessage: string;
 }
 
 const initialState: AppState = {
@@ -153,6 +155,8 @@ const initialState: AppState = {
   discoveredDevices: [],
   searchQuery: '',
   scanActive: false,
+  discoveryProgress: 0,
+  discoveryMessage: '',
 };
 
 /* ─── Actions ─── */
@@ -168,6 +172,7 @@ type Action =
   | { type: 'CLEAR_EVENTS' }
   | { type: 'SET_SEARCH'; query: string }
   | { type: 'SET_SCAN_ACTIVE'; active: boolean }
+  | { type: 'SET_DISCOVERY_SCAN'; progress: number; message: string }
   | { type: 'SET_DISCOVERED'; devices: DiscoveredDevice[] }
   | { type: 'ADD_DISCOVERED'; device: DiscoveredDevice }
   | { type: 'UPDATE_DISCOVERED'; id: string; phase: ScanPhase }
@@ -260,6 +265,12 @@ function appReducer(state: AppState, action: Action): AppState {
     case 'CLEAR_EVENTS': return { ...state, events: [] };
     case 'SET_SEARCH': return { ...state, searchQuery: action.query };
     case 'SET_SCAN_ACTIVE': return { ...state, scanActive: action.active };
+    case 'SET_DISCOVERY_SCAN': return {
+      ...state,
+      discoveryProgress: action.progress,
+      discoveryMessage: action.message,
+      scanActive: action.progress > 0 && action.progress < 100,
+    };
     case 'SET_DISCOVERED': return { ...state, discoveredDevices: action.devices };
     case 'ADD_DISCOVERED': return { ...state, discoveredDevices: [...state.discoveredDevices, action.device] };
     case 'UPDATE_DISCOVERED': return { ...state, discoveredDevices: state.discoveredDevices.map(x => x.id === action.id ? { ...x, scanPhase: action.phase } : x) };

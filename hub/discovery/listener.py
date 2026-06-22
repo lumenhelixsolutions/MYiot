@@ -11,7 +11,9 @@ import logging
 import re
 import socket
 import struct
-from typing import Callable, Dict, Any, Optional, List
+import time
+import uuid
+from typing import Awaitable, Callable, Dict, Any, Optional, List, Union
 
 logger = logging.getLogger(__name__)
 
@@ -52,8 +54,15 @@ class NetworkDiscoveryListener:
 
     def __init__(
         self,
-        on_device_found: Callable[[Dict[str, Any]], None],
-        on_state_change: Callable[[Dict[str, Any]], None],
+        on_device_found: Callable[
+            [Dict[str, Any]], Union[None, Awaitable[None]]
+        ],
+        on_state_change: Callable[
+            [Dict[str, Any]], Union[None, Awaitable[None]]
+        ],
+        on_event: Optional[
+            Callable[[Dict[str, Any]], Union[None, Awaitable[None]]]
+        ] = None,
     ):
         """
         Initialize the discovery listener.
@@ -63,11 +72,53 @@ class NetworkDiscoveryListener:
                 Receives a dictionary with device details.
             on_state_change: Callback invoked when a known device's state changes.
                 Receives a dictionary with updated device details.
+            on_event: Optional callback for scan progress / pending device updates.
         """
         self.on_device_found = on_device_found
         self.on_state_change = on_state_change
+        self.on_event = on_event
         self._listeners: List[asyncio.Task] = []
         self._running = False
+        self._pending: Dict[str, Dict[str, Any]] = {}
+        self._scan_state: Dict[str, Any] = {
+            "active": False,
+            "progress": 0,
+            "message": "Idle",
+            "protocols": [],
+            "started_at": None,
+            "completed_at": None,
+        }
+        self._scan_task: Optional[asyncio.Task] = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+
+    def _schedule_coroutine(self, coro: Awaitable[Any]) -> None:
+        """Schedule work on the listener loop (safe from zeroconf threads)."""
+        loop = self._loop
+        if loop is None:
+            logger.warning(
+                "Cannot schedule discovery work — listener not started"
+            )
+            return
+        try:
+            if asyncio.get_running_loop() is loop:
+                asyncio.create_task(coro)
+                return
+        except RuntimeError:
+            pass
+        asyncio.run_coroutine_threadsafe(coro, loop)
+
+    async def _invoke_callback(
+        self,
+        callback: Callable[..., Union[None, Awaitable[None]]],
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        try:
+            result = callback(*args, **kwargs)
+            if asyncio.iscoroutine(result):
+                await result
+        except Exception as exc:
+            logger.debug("Discovery callback failed: %s", exc)
 
     async def start(self) -> None:
         """Start all discovery listeners concurrently."""
@@ -76,6 +127,7 @@ class NetworkDiscoveryListener:
             return
 
         self._running = True
+        self._loop = asyncio.get_running_loop()
         logger.info("Starting network discovery listeners...")
 
         self._listeners = [
@@ -237,7 +289,7 @@ class NetworkDiscoveryListener:
         # Skip byebye notifications
         if "byebye" in nts.lower():
             device_id = usn if usn else f"ssdp_{source_ip}"
-            self.on_state_change(
+            await self._emit_state_change(
                 {
                     "device_id": device_id,
                     "source_ip": source_ip,
@@ -283,7 +335,7 @@ class NetworkDiscoveryListener:
                 manufacturer,
                 device_type,
             )
-            self.on_device_found(device_info)
+            await self._emit_device_found(device_info)
         elif is_response:
             logger.debug(
                 "SSDP response from %s: %s (%s)",
@@ -291,7 +343,7 @@ class NetworkDiscoveryListener:
                 manufacturer,
                 device_type,
             )
-            self.on_device_found(device_info)
+            await self._emit_device_found(device_info)
 
     # ─── mDNS Listener ──────────────────────────────────────────────────────
 
@@ -326,12 +378,14 @@ class NetworkDiscoveryListener:
                     """Called when a service is removed."""
                     device_id = f"mdns_{name}"
                     if self.outer._running:
-                        self.outer.on_state_change(
-                            {
-                                "device_id": device_id,
-                                "online": False,
-                                "protocol": "mdns",
-                            }
+                        self.outer._schedule_coroutine(
+                            self.outer._emit_state_change(
+                                {
+                                    "device_id": device_id,
+                                    "online": False,
+                                    "protocol": "mdns",
+                                }
+                            )
                         )
 
                 def update_service(
@@ -379,7 +433,9 @@ class NetworkDiscoveryListener:
                     }
 
                     if self.outer._running:
-                        self.outer.on_device_found(device_info)
+                        self.outer._schedule_coroutine(
+                            self.outer._emit_device_found(device_info)
+                        )
 
             # Services to browse for
             service_types = [
@@ -562,7 +618,7 @@ class NetworkDiscoveryListener:
                     },
                 }
 
-                self.on_device_found(device_info)
+                await self._emit_device_found(device_info)
             except Exception as exc:
                 logger.debug(
                     "Failed to parse TP-Link Kasa broadcast from %s: %s",
@@ -579,6 +635,234 @@ class NetworkDiscoveryListener:
                 manufacturer,
                 len(data),
             )
+
+    # ─── Scan API ───────────────────────────────────────────────────────────
+
+    def get_scan_status(self) -> Dict[str, Any]:
+        """Return current scan progress for REST/WS consumers."""
+        return {
+            **self._scan_state,
+            "devices_found": len(self._pending),
+        }
+
+    def get_pending_devices(self) -> List[Dict[str, Any]]:
+        """Return devices discovered but not yet registered on the hub."""
+        return sorted(
+            self._pending.values(),
+            key=lambda d: d.get("discovered_at", 0),
+            reverse=True,
+        )
+
+    def pop_pending_device(self, device_id: str) -> Optional[Dict[str, Any]]:
+        """Remove and return a pending device once registered."""
+        return self._pending.pop(device_id, None)
+
+    async def start_active_scan(self) -> Dict[str, Any]:
+        """Kick off a global active scan across SSDP, mDNS, and UDP probes."""
+        if self._scan_task and not self._scan_task.done():
+            return self.get_scan_status()
+
+        self._pending.clear()
+        self._scan_state = {
+            "active": True,
+            "progress": 0,
+            "message": "Initializing global scan...",
+            "protocols": ["ssdp", "mdns", "udp"],
+            "started_at": time.time(),
+            "completed_at": None,
+        }
+        await self._emit_event({"type": "scan_progress", **self._scan_state})
+        self._scan_task = asyncio.create_task(self._run_active_scan())
+        return self.get_scan_status()
+
+    async def stop_active_scan(self) -> Dict[str, Any]:
+        """Stop an in-progress active scan."""
+        if self._scan_task and not self._scan_task.done():
+            self._scan_task.cancel()
+            try:
+                await self._scan_task
+            except asyncio.CancelledError:
+                pass
+        self._scan_state.update(
+            {
+                "active": False,
+                "message": "Scan stopped",
+                "completed_at": time.time(),
+            }
+        )
+        await self._emit_event({"type": "scan_progress", **self._scan_state})
+        return self.get_scan_status()
+
+    async def _run_active_scan(self) -> None:
+        """Execute phased network discovery with live progress updates."""
+        phases = [
+            (15, "Probing mDNS services..."),
+            (35, "Broadcasting SSDP M-SEARCH..."),
+            (55, "Scanning SSDP multicast..."),
+            (70, "Listening for UDP device broadcasts..."),
+            (85, "Classifying discovered hardware..."),
+            (95, "Finalizing device fingerprints..."),
+        ]
+        try:
+            await self._send_ssdp_msearch()
+            for progress, message in phases:
+                if not self._running:
+                    break
+                self._scan_state.update({"progress": progress, "message": message})
+                await self._emit_event({"type": "scan_progress", **self._scan_state})
+                await self._advance_pending_phases()
+                await asyncio.sleep(1.2)
+
+            await asyncio.sleep(2.0)
+            await self._advance_pending_phases(finalize=True)
+            count = len(self._pending)
+            self._scan_state.update(
+                {
+                    "active": False,
+                    "progress": 100,
+                    "message": f"Found {count} device{'s' if count != 1 else ''}",
+                    "completed_at": time.time(),
+                }
+            )
+            await self._emit_event({"type": "scan_complete", **self._scan_state})
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("Active scan failed: %s", exc)
+            self._scan_state.update(
+                {
+                    "active": False,
+                    "message": f"Scan error: {exc}",
+                    "completed_at": time.time(),
+                }
+            )
+            await self._emit_event({"type": "scan_progress", **self._scan_state})
+        finally:
+            self._scan_task = None
+
+    async def _send_ssdp_msearch(self) -> None:
+        """Broadcast SSDP M-SEARCH requests for common smart-home service types."""
+        search_targets = [
+            "ssdp:all",
+            "upnp:rootdevice",
+            "urn:schemas-upnp-org:device:Basic:1",
+            "urn:schemas-upnp-org:device:MediaServer:1",
+        ]
+        sock: Optional[socket.socket] = None
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
+            for st in search_targets:
+                payload = (
+                    "M-SEARCH * HTTP/1.1\r\n"
+                    f"HOST: {SSDP_MULTICAST_GROUP}:{SSDP_PORT}\r\n"
+                    'MAN: "ssdp:discover"\r\n'
+                    "MX: 2\r\n"
+                    f"ST: {st}\r\n"
+                    "\r\n"
+                ).encode("utf-8")
+                sock.sendto(
+                    payload,
+                    (SSDP_MULTICAST_GROUP, SSDP_PORT),
+                )
+                await asyncio.sleep(0.15)
+        except OSError as exc:
+            logger.warning("SSDP M-SEARCH broadcast failed: %s", exc)
+        finally:
+            if sock:
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+
+    async def _advance_pending_phases(
+        self, finalize: bool = False
+    ) -> None:
+        """Progress pending devices through probing -> complete phases."""
+        phase_order = ["probing", "authenticating", "classifying", "complete"]
+        for device in self._pending.values():
+            current = device.get("scan_phase", "probing")
+            if finalize:
+                device["scan_phase"] = "complete"
+            elif current in phase_order:
+                idx = phase_order.index(current)
+                if idx < len(phase_order) - 1:
+                    device["scan_phase"] = phase_order[idx + 1]
+            await self._emit_event(
+                {
+                    "type": "device_discovered",
+                    "device": device,
+                }
+            )
+
+    async def _emit_state_change(self, device_info: Dict[str, Any]) -> None:
+        await self._invoke_callback(self.on_state_change, device_info)
+
+    async def _emit_device_found(self, device_info: Dict[str, Any]) -> None:
+        """Record a discovery hit, notify callbacks, and broadcast to clients."""
+        pending = self._upsert_pending(device_info)
+        await self._invoke_callback(self.on_device_found, device_info)
+        await self._emit_event({"type": "device_discovered", "device": pending})
+
+    def _upsert_pending(self, device_info: Dict[str, Any]) -> Dict[str, Any]:
+        device_id = device_info.get("device_id") or device_info.get("usn") or str(
+            uuid.uuid4()
+        )
+        ip = (
+            device_info.get("source_ip")
+            or device_info.get("state", {}).get("ip")
+            or device_info.get("state", {}).get("ip_address")
+            or ""
+        )
+        manufacturer = device_info.get("manufacturer", "unknown")
+        device_type = device_info.get("device_type", "unknown")
+        protocol = str(device_info.get("protocol", "ssdp")).upper()
+        name = (
+            device_info.get("state", {}).get("name")
+            or device_info.get("model")
+            or f"{manufacturer} {device_type}".strip()
+        )
+
+        existing = self._pending.get(device_id)
+        if existing:
+            existing.update(
+                {
+                    "ip_address": ip or existing.get("ip_address", ""),
+                    "signal_strength": max(
+                        existing.get("signal_strength", 0),
+                        device_info.get("state", {}).get("rssi", 72),
+                    ),
+                    "scan_phase": "classifying",
+                    "last_seen": time.time(),
+                }
+            )
+            return existing
+
+        pending = {
+            "id": device_id,
+            "device_id": device_id,
+            "name": name,
+            "manufacturer": manufacturer,
+            "model": device_info.get("model", "unknown"),
+            "device_type": device_type,
+            "ip_address": ip,
+            "protocol": protocol,
+            "mac_address": device_info.get("mac_address", ""),
+            "firmware": device_info.get("firmware", "unknown"),
+            "signal_strength": device_info.get("state", {}).get("rssi", 68),
+            "scan_phase": "probing",
+            "discovered_at": time.time(),
+            "last_seen": time.time(),
+            "location": device_info.get("location", ""),
+            "usn": device_info.get("usn", ""),
+        }
+        self._pending[device_id] = pending
+        return pending
+
+    async def _emit_event(self, payload: Dict[str, Any]) -> None:
+        if not self.on_event:
+            return
+        await self._invoke_callback(self.on_event, payload)
 
     # ─── Helper Methods ─────────────────────────────────────────────────────
 
