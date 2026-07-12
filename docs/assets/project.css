@@ -1,0 +1,40 @@
+/* MYiot — product-specific theme */
+
+:root {
+  --bg-deep: #0B1021;
+  --bg-surface: #111827;
+  --text-primary: #FFFFFF;
+  --text-secondary: #E5E7EB;
+  --accent: #6366F1;
+  --secondary: #06B6D4;
+  --accent-glow: #6366F159;
+  --accent-soft: #6366F11A;
+}
+
+.hero-visual {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hero-visual svg {
+  width: min(55vw, 520px);
+  height: auto;
+  opacity: 0.55;
+}
+
+@media (max-width: 768px) {
+  .hero-visual svg { width: 85vw; opacity: 0.35; }
+}
+
+.tagline::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent-glow);
+}
+
+.btn-primary { color: #FFFFFF; }
+.stat-value { color: var(--accent); }
