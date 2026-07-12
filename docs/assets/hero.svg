@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid slice" role="img" aria-hidden="true">
+  <rect width="1200" height="400" fill="#0B1021"/>
+  <defs>
+    <radialGradient id="myiotGlow" cx="0.7" cy="0.5" r="0.6">
+      <stop offset="0%" stop-color="#6366F1" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#6366F1" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="homeGrad" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#6366F1"/>
+      <stop offset="100%" stop-color="#06B6D4"/>
+    </linearGradient>
+  </defs>
+  <circle cx="850" cy="200" r="220" fill="url(#myiotGlow)"/>
+  <g transform="translate(720, 110) scale(0.8)">
+    <path d="M20 120 L160 20 L300 120 V280 C300 300 284 316 264 316 H56 C36 316 20 300 20 280 Z" fill="url(#homeGrad)" opacity="0.15" stroke="#6366F1" stroke-width="4"/>
+    <rect x="70" y="160" width="60" height="60" rx="10" fill="none" stroke="#06B6D4" stroke-width="3"/>
+    <circle cx="100" cy="190" r="15" fill="none" stroke="#06B6D4" stroke-width="3"/>
+    <text x="100" y="196" font-family="Inter, sans-serif" font-size="14" fill="#06B6D4" text-anchor="middle">23°</text>
+    <rect x="170" y="160" width="60" height="60" rx="10" fill="none" stroke="#F59E0B" stroke-width="3"/>
+    <path d="M185 175 H215 M200 175 V205" stroke="#F59E0B" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="100" cy="255" r="20" fill="none" stroke="#6366F1" stroke-width="3"/>
+    <path d="M90 255 Q100 265 110 255" fill="none" stroke="#F59E0B" stroke-width="2" stroke-linecap="round"/>
+    <rect x="170" y="240" width="50" height="50" rx="8" fill="none" stroke="#6366F1" stroke-width="3"/>
+    <circle cx="195" cy="258" r="6" fill="#6366F1"/>
+    <path d="M40 90 L40 70 M30 78 L40 70 L50 78" stroke="#06B6D4" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M280 90 L280 70 M270 78 L280 70 L290 78" stroke="#06B6D4" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="80" y="170" font-family="Space Grotesk, Inter, sans-serif" font-size="72" font-weight="700" fill="#F8FAFC">MYiot</text>
+  <text x="84" y="230" font-family="Inter, sans-serif" font-size="28" fill="#94A3B8">Secure. Smart. Connected.</text>
+</svg>

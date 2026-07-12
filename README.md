@@ -1,7 +1,11 @@
 # MYiot
 
 <p align="center">
-  <img src="docs/assets/logo.svg" alt="MYiot logo" width="160">
+  <img src="docs/assets/brand-board.png" alt="MYiot header" width="100%">
+</p>
+
+<p align="center">
+  <img src="docs/assets/logo.svg" alt="MYiot logo" width="120">
 </p>
 
 <h3 align="center">Secure. Smart. Connected.</h3>
@@ -9,9 +13,9 @@
 <p align="center">One universal hub for every smart device in your home.</p>
 
 <p align="center">
-  <a href="https://lumenhelixsolutions.github.io/MYiot/">Launch Page</a>
+  <a href="https://lumenhelixlab.github.io/MYiot/">Launch Page</a>
   <span> · </span>
-  <a href="https://github.com/lumenhelixsolutions/MYiot">GitHub</a>
+  <a href="https://github.com/lumenhelixlab/MYiot">GitHub</a>
   <span> · </span>
   <a href="https://lumenhelix.com">LumenHelix</a>
 </p>
@@ -31,7 +35,7 @@ MYiot unifies lights, cameras, locks, thermostats, and sensors from any manufact
 ### macOS / Linux
 
 ```bash
-git clone https://github.com/lumenhelixsolutions/MYiot.git
+git clone https://github.com/lumenhelixlab/MYiot.git
 cd MYiot
 cp hub/.env.example hub/.env
 docker compose up -d
@@ -40,7 +44,7 @@ docker compose up -d
 ### Windows (PowerShell)
 
 ```powershell
-git clone https://github.com/lumenhelixsolutions/MYiot.git
+git clone https://github.com/lumenhelixlab/MYiot.git
 Set-Location MYiot
 copy hub\.env.example hub\.env
 docker compose up -d
@@ -49,7 +53,7 @@ docker compose up -d
 ### Windows (Git Bash / WSL)
 
 ```bash
-git clone https://github.com/lumenhelixsolutions/MYiot.git
+git clone https://github.com/lumenhelixlab/MYiot.git
 cd MYiot
 cp hub/.env.example hub/.env
 docker compose up -d
